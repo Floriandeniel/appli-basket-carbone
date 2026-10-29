@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Coordonnees } from "./distances";
 import type { CreneauEntrainement, DeplacementStaff, Match, WeekendBuvette } from "./types";
 import { PARAMETRES_DEFAUT, type Parametres } from "./couts";
+import { OBJECTIFS_DEFAUT, type Objectifs } from "./objectifs";
 
 /** État de l'application, conservé dans le navigateur (localStorage) */
 export interface EtatClub {
@@ -15,17 +16,18 @@ export interface EtatClub {
   buvette: WeekendBuvette[];
   entrainements: CreneauEntrainement[];
   staff: DeplacementStaff[];
+  objectifs: Objectifs;
 }
 
 const CLE = "appli-basket-carbone:v1";
-const ETAT_INITIAL: EtatClub = { villeClub: "Rennes", matchs: [], cacheGeo: {}, parametres: PARAMETRES_DEFAUT, buvette: [], entrainements: [], staff: [] };
+const ETAT_INITIAL: EtatClub = { villeClub: "Rennes", matchs: [], cacheGeo: {}, parametres: PARAMETRES_DEFAUT, buvette: [], entrainements: [], staff: [], objectifs: OBJECTIFS_DEFAUT };
 
 function charger(): EtatClub {
   try {
     const brut = window.localStorage.getItem(CLE);
     if (!brut) return ETAT_INITIAL;
     const lu = JSON.parse(brut);
-    return { ...ETAT_INITIAL, ...lu, parametres: {
+    return { ...ETAT_INITIAL, ...lu, objectifs: { ...OBJECTIFS_DEFAUT, ...(lu.objectifs ?? {}) }, parametres: {
         ...PARAMETRES_DEFAUT,
         ...(lu.parametres ?? {}),
         buvetteParMatch: { ...PARAMETRES_DEFAUT.buvetteParMatch, ...(lu.parametres?.buvetteParMatch ?? {}) },

@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Bus, Car, CupSoda, Dumbbell, Euro, Fuel, RotateCcw, Users } from "lucide-react";
+import { Bus, Car, CupSoda, Dumbbell, Euro, Fuel, RotateCcw, Target, Users } from "lucide-react";
 import { CONSOMMABLES, LIBELLES_CONSOMMABLES } from "@/lib/club";
+import { OBJECTIFS_DEFAUT, type Objectifs } from "@/lib/objectifs";
 import { coutKmMinibus, fmtEuro, PARAMETRES_DEFAUT, type Parametres as TParametres } from "@/lib/couts";
 import { FACTEURS_EMISSION, LIBELLES_VEHICULES, TYPES_VEHICULES } from "@/lib/emissions";
 import { fmt } from "@/lib/format";
 
 interface Props {
+  objectifs: Objectifs;
+  onObjectifs: (o: Objectifs) => void;
   parametres: TParametres;
   onChange: (p: TParametres) => void;
   nbMatchs: number;
@@ -55,7 +58,7 @@ function Champ({
   );
 }
 
-export function Parametres({ parametres: p, onChange, nbMatchs, nbSansVehicule, onAppliquerDefaut }: Props) {
+export function Parametres({ objectifs, onObjectifs, parametres: p, onChange, nbMatchs, nbSansVehicule, onAppliquerDefaut }: Props) {
   const [confirmerTous, setConfirmerTous] = useState(false);
   type CleNombre = { [K in keyof TParametres]: TParametres[K] extends number ? K : never }[keyof TParametres];
   const maj = (cle: CleNombre) => (n: number) => onChange({ ...p, [cle]: n });
@@ -69,6 +72,46 @@ export function Parametres({ parametres: p, onChange, nbMatchs, nbSansVehicule, 
           enregistrés dans ce navigateur.
         </p>
       </div>
+
+      <section className="carte divide-y divide-sauge-100">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-4">
+          <h3 className="flex items-center gap-2 text-base font-bold text-foret-900">
+            <Target className="h-4 w-4 text-terracotta-500" /> Objectifs du club
+          </h3>
+          <button onClick={() => onObjectifs(OBJECTIFS_DEFAUT)} className="text-xs text-foret-700/60 hover:text-terracotta-600">
+            Objectifs par défaut
+          </button>
+        </div>
+        <div className="grid gap-x-10 gap-y-4 p-5 lg:grid-cols-2">
+          {(
+            [
+              ["co2SaisonMaxT", "Empreinte carbone maximale sur la saison", "tCO2e", 1, "Tous modules confondus."],
+              ["occupationMin", "Remplissage minimum des véhicules (matchs)", "pers./véh.", 0.1, "Participants par véhicule."],
+              ["reductionCovoitMin", "Baisse minimale du CO2 grâce au covoiturage", "%", 1, "Par rapport à une voiture par participant."],
+              ["co2ParParticipantMax", "CO2 maximum par participant et par match", "kgCO2e", 0.1],
+              ["partBasCarboneMin", "Part minimale de km en hybride, électrique ou minibus", "%", 1, "Sur les matchs."],
+              ["partModesDouxMin", "Joueurs venant à l'entraînement sans voiture solo", "%", 1, "Covoiturage, bus, vélo ou marche."],
+              ["coutParParticipantMax", "Coût de transport maximum par participant", "€", 0.1, "Par déplacement de match."],
+              ["co2BuvetteParMatchMax", "CO2 maximum de la buvette par match", "kgCO2e", 0.1],
+            ] as [keyof Objectifs, string, string, number, string?][]
+          ).map(([cle, libelle, unite, pas, aide]) => (
+            <Champ
+              key={cle}
+              id={`objectif-${cle}`}
+              libelle={libelle}
+              aide={aide}
+              unite={unite}
+              pas={pas}
+              valeur={objectifs[cle]}
+              onChange={(n) => onObjectifs({ ...objectifs, [cle]: n })}
+            />
+          ))}
+        </div>
+        <p className="px-5 py-3 text-xs text-foret-700/70">
+          Sur le tableau de bord, chaque objectif reçoit une pastille : vert si atteint, orange s&apos;il manque moins de 10 %, rouge
+          sinon.
+        </p>
+      </section>
 
       <section className="carte divide-y divide-sauge-100">
         <h3 className="flex items-center gap-2 px-5 py-4 text-base font-bold text-foret-900">
@@ -87,7 +130,7 @@ export function Parametres({ parametres: p, onChange, nbMatchs, nbSansVehicule, 
           <p className="rounded-xl bg-sauge-50 px-4 py-3 text-xs text-foret-700">
             Exemple : 10 participants à {Math.max(1, p.personnesParVoiture)} par voiture ={" "}
             <strong>{Math.ceil(10 / Math.max(1, p.personnesParVoiture))} voitures thermiques</strong>. Vous modifiez
-            ensuite à la main dans l&apos;onglet Logistique les matchs faits en hybride, électrique ou minibus.
+            ensuite à la main dans l&apos;onglet Transport matchs les matchs faits en hybride, électrique ou minibus.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <button

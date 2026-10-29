@@ -76,5 +76,13 @@ import("../src/lib/club").then(({ calculerBuvette, calculerCreneau, calculerDepl
     sourceDistance: "manuelle", participants: 2, vehicules: { thermique: 1, hybride: 0, electrique: 0, minibus: 0 }, repetitions: 10 }, PARAMETRES_DEFAUT);
   assert.equal(+bs.co2.toFixed(2), 65.4);
   assert.equal(+bs.cout.toFixed(2), 120);
-  console.log("Tous les tests passent ✔");
+  return import("../src/lib/objectifs").then(({ statutObjectif }) => {
+    assert.equal(statutObjectif(38, 40, "max"), "atteint");
+    assert.equal(statutObjectif(43, 40, "max"), "proche");
+    assert.equal(statutObjectif(45, 40, "max"), "rate");
+    assert.equal(statutObjectif(3.7, 4, "min"), "proche");
+    assert.equal(statutObjectif(3, 4, "min"), "rate");
+    assert.equal(statutObjectif(null, 4, "min"), "sans-donnee");
+    console.log("Tous les tests passent ✔");
+  });
 });

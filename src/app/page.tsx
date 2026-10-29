@@ -156,6 +156,8 @@ export default function Accueil() {
             equipes={equipes}
             parametres={etat.parametres}
             onAllerLogistique={() => setOnglet("logistique")}
+            objectifs={etat.objectifs}
+            onReglerObjectifs={() => setOnglet("parametres")}
           />
         ) : onglet === "import" ? (
           <ImportExcel
@@ -195,6 +197,8 @@ export default function Accueil() {
           />
         ) : (
           <Parametres
+            objectifs={etat.objectifs}
+            onObjectifs={(objectifs) => setEtat((e) => ({ ...e, objectifs }))}
             parametres={etat.parametres}
             onChange={(parametres) => setEtat((e) => ({ ...e, parametres }))}
             nbMatchs={etat.matchs.length}

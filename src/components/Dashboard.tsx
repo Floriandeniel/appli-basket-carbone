@@ -27,6 +27,8 @@ import { equivalences } from "@/lib/equivalences";
 import { exporterBilanCsv, exporterBilanExcel } from "@/lib/excel";
 import { fmt, fmtCO2, libelleMois } from "@/lib/format";
 import type { CreneauEntrainement, DeplacementStaff, Match, WeekendBuvette } from "@/lib/types";
+import { evaluerObjectifs, statutObjectif, type Objectifs } from "@/lib/objectifs";
+import { Point, TableauObjectifs } from "./Objectifs";
 import { calculerBilanClub, CONSOMMABLES, LIBELLES_CATEGORIES, LIBELLES_COURTS_CONSOMMABLES, type Categorie } from "@/lib/club";
 import { calculerCoutGlobal, fmtEuro, type Parametres } from "@/lib/couts";
 
@@ -38,6 +40,8 @@ interface Props {
   equipes: string[];
   parametres: Parametres;
   onAllerLogistique: () => void;
+  objectifs: Objectifs;
+  onReglerObjectifs: () => void;
 }
 
 function CarteImpact({
@@ -83,7 +87,7 @@ function CarteImpact({
   );
 }
 
-export function Dashboard({ matchs, entrainements, staff, buvette, equipes, parametres, onAllerLogistique }: Props) {
+export function Dashboard({ matchs, entrainements, staff, buvette, equipes, parametres, onAllerLogistique, objectifs, onReglerObjectifs }: Props) {
   const [equipe, setEquipe] = useState("toutes");
   const [mois, setMois] = useState("tous");
 
@@ -193,6 +197,11 @@ export function Dashboard({ matchs, entrainements, staff, buvette, equipes, para
           {incomplets} match(s) sans logistique ou sans distance ne sont pas comptés. Compléter dans l&apos;onglet Logistique →
         </button>
       )}
+
+      <TableauObjectifs
+        resultats={evaluerObjectifs({ matchs, entrainements, staff, buvette }, { equipe, mois }, parametres, objectifs)}
+        onReglages={onReglerObjectifs}
+      />
 
       {/* Bilan global du club */}
       <section className="carte overflow-hidden">
@@ -412,7 +421,7 @@ export function Dashboard({ matchs, entrainements, staff, buvette, equipes, para
       <section className="carte overflow-hidden">
         <h3 className="border-b border-sauge-200 px-5 py-3 text-base font-bold text-foret-900">Bilan par équipe</h3>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[820px] text-sm">
             <thead className="bg-sauge-50 text-left text-xs uppercase tracking-wide text-foret-700">
               <tr>
                 <th className="px-5 py-2.5">Équipe</th>
@@ -421,6 +430,7 @@ export function Dashboard({ matchs, entrainements, staff, buvette, equipes, para
                 <th className="px-5 py-2.5 text-right">Émis (kg)</th>
                 <th className="px-5 py-2.5 text-right">Évité (kg)</th>
                 <th className="px-5 py-2.5 text-right">Occupation</th>
+                <th className="px-5 py-2.5 text-right">CO2 / part.</th>
                 <th className="px-5 py-2.5 text-right">Coût</th>
               </tr>
             </thead>
@@ -436,7 +446,22 @@ export function Dashboard({ matchs, entrainements, staff, buvette, equipes, para
                   <td className="px-5 py-2.5 text-right tabular-nums">{fmt(x.kmParcourus)}</td>
                   <td className="px-5 py-2.5 text-right tabular-nums">{fmt(x.emissionsReelles, 1)}</td>
                   <td className="px-5 py-2.5 text-right font-semibold tabular-nums text-emeraude-600">{fmt(x.emissionsEvitees, 1)}</td>
-                  <td className="px-5 py-2.5 text-right tabular-nums">{x.tauxOccupationMoyen === null ? "—" : fmt(x.tauxOccupationMoyen, 1)}</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums">
+                    <span className="inline-flex items-center justify-end gap-2">
+                      {x.tauxOccupationMoyen !== null && <Point statut={statutObjectif(x.tauxOccupationMoyen, objectifs.occupationMin, "min")} />}
+                      {x.tauxOccupationMoyen === null ? "—" : fmt(x.tauxOccupationMoyen, 1)}
+                    </span>
+                  </td>
+                  <td className="px-5 py-2.5 text-right tabular-nums">
+                    {x.participants > 0 ? (
+                      <span className="inline-flex items-center justify-end gap-2">
+                        <Point statut={statutObjectif(x.emissionsReelles / x.participants, objectifs.co2ParParticipantMax, "max")} />
+                        {fmt(x.emissionsReelles / x.participants, 1)} kg
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="px-5 py-2.5 text-right tabular-nums">{fmtEuro(x.cout)}</td>
                 </tr>
               ))}
