@@ -1,20 +1,23 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Car, LayoutDashboard, MapPin, RotateCcw, Settings, Sparkles, Upload } from "lucide-react";
+import { Briefcase, Car, CupSoda, Dumbbell, LayoutDashboard, MapPin, RotateCcw, Settings, Sparkles, Upload } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { BoutonInstaller } from "@/components/BoutonInstaller";
 import { Dashboard } from "@/components/Dashboard";
 import { ImportExcel } from "@/components/ImportExcel";
 import { Logistique } from "@/components/Logistique";
 import { Parametres } from "@/components/Parametres";
+import { Buvette } from "@/components/Buvette";
+import { Entrainements } from "@/components/Entrainements";
+import { Staff } from "@/components/Staff";
 import { completerVehicules, vehiculesParDefaut } from "@/lib/couts";
 import { useEtatClub } from "@/lib/store";
-import { calendrierExemple } from "@/lib/exemple";
+import { buvetteExemple, calendrierExemple, entrainementsExemple, staffExemple } from "@/lib/exemple";
 import { estimerDistanceAR, trouverCommune } from "@/lib/distances";
 import { calculerBilanMatch } from "@/lib/emissions";
 
-type Onglet = "dashboard" | "import" | "logistique" | "parametres";
+type Onglet = "dashboard" | "import" | "logistique" | "entrainements" | "staff" | "buvette" | "parametres";
 
 export default function Accueil() {
   const { etat, setEtat, pret, majMatch, ajouterMatchs, supprimerMatch } = useEtatClub();
@@ -44,11 +47,27 @@ export default function Accueil() {
   const onglets: { id: Onglet; libelle: string; icone: typeof Car; badge?: number }[] = [
     { id: "dashboard", libelle: "Tableau de bord", icone: LayoutDashboard },
     { id: "import", libelle: "Import Excel", icone: Upload },
-    { id: "logistique", libelle: "Logistique", icone: Car, badge: nbACompleter },
+    { id: "logistique", libelle: "Transport matchs", icone: Car, badge: nbACompleter },
+    { id: "entrainements", libelle: "Entraînements", icone: Dumbbell },
+    { id: "staff", libelle: "Staff", icone: Briefcase },
+    { id: "buvette", libelle: "Buvette", icone: CupSoda },
     { id: "parametres", libelle: "Paramètres", icone: Settings },
   ];
 
-  const vide = pret && etat.matchs.length === 0;
+  const vide =
+    pret && !etat.matchs.length && !etat.entrainements.length && !etat.staff.length && !etat.buvette.length;
+  const nbDonnees = etat.matchs.length + etat.entrainements.length + etat.staff.length + etat.buvette.length;
+
+  function chargerExemple() {
+    const matchs = completerVehicules(calendrierExemple(etat.villeClub), etat.parametres);
+    setEtat((e) => ({
+      ...e,
+      matchs,
+      entrainements: entrainementsExemple(),
+      staff: staffExemple(e.villeClub),
+      buvette: buvetteExemple(matchs),
+    }));
+  }
   const nbSansVehicule = etat.matchs.filter((m) => Object.values(m.vehicules).every((n) => !n)).length;
 
   return (
@@ -61,7 +80,7 @@ export default function Accueil() {
               <h1 className="text-xl font-extrabold leading-none text-foret-900">
                 Appli Basket <span className="text-emeraude-600">Carbone</span>
               </h1>
-              <p className="mt-1 text-xs text-foret-700/70">Déplacements d&apos;équipes bas carbone</p>
+              <p className="mt-1 text-xs text-foret-700/70">Bilan carbone du club</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -104,24 +123,24 @@ export default function Accueil() {
           </p>
         )}
 
-        {vide && onglet !== "import" && onglet !== "parametres" ? (
+        {vide && (onglet === "dashboard" || onglet === "logistique") ? (
           <section className="carte relative overflow-hidden p-8 md:p-12">
             <div className="max-w-xl">
               <span className="pastille bg-foret-100 text-foret-700">
                 <Sparkles className="h-3 w-3" /> Saison 2026-2027
               </span>
               <h2 className="mt-4 text-3xl font-extrabold text-foret-900 md:text-4xl">
-                Mesurez l&apos;impact des déplacements, valorisez le covoiturage.
+                Mesurez l&apos;empreinte carbone du club, valorisez le covoiturage.
               </h2>
               <p className="mt-3 text-foret-700/80">
-                Importez le calendrier des matchs, indiquez les véhicules utilisés : l&apos;application calcule les émissions
-                réelles, compare à un scénario sans covoiturage et chiffre le CO2e évité par chaque équipe.
+                Matchs à l&apos;extérieur, entraînements, déplacements du staff et buvette : l&apos;application calcule les émissions,
+                les coûts de transport et le CO2e évité grâce au covoiturage.
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <button onClick={() => setOnglet("import")} className="btn-primaire">
                   <Upload className="h-4 w-4" /> Importer un calendrier
                 </button>
-                <button onClick={() => ajouterMatchs(completerVehicules(calendrierExemple(etat.villeClub), etat.parametres), true)} className="btn-accent">
+                <button onClick={chargerExemple} className="btn-accent">
                   <Sparkles className="h-4 w-4" /> Charger un exemple
                 </button>
               </div>
@@ -129,7 +148,15 @@ export default function Accueil() {
             <Logo className="pointer-events-none absolute -bottom-6 right-4 hidden h-64 w-64 opacity-90 md:block" />
           </section>
         ) : onglet === "dashboard" ? (
-          <Dashboard matchs={etat.matchs} equipes={equipes} parametres={etat.parametres} onAllerLogistique={() => setOnglet("logistique")} />
+          <Dashboard
+            matchs={etat.matchs}
+            entrainements={etat.entrainements}
+            staff={etat.staff}
+            buvette={etat.buvette}
+            equipes={equipes}
+            parametres={etat.parametres}
+            onAllerLogistique={() => setOnglet("logistique")}
+          />
         ) : onglet === "import" ? (
           <ImportExcel
             villeClub={etat.villeClub}
@@ -141,9 +168,31 @@ export default function Accueil() {
               setOnglet("logistique");
             }}
           />
-        ) : (
-          onglet === "logistique" ? (
+        ) : onglet === "logistique" ? (
           <Logistique matchs={etat.matchs} equipes={equipes} parametres={etat.parametres} onMaj={majMatch} onSupprimer={supprimerMatch} />
+        ) : onglet === "entrainements" ? (
+          <Entrainements
+            creneaux={etat.entrainements}
+            matchs={etat.matchs}
+            equipes={equipes}
+            parametres={etat.parametres}
+            onChange={(entrainements) => setEtat((e) => ({ ...e, entrainements }))}
+          />
+        ) : onglet === "staff" ? (
+          <Staff
+            deplacements={etat.staff}
+            villeClub={etat.villeClub}
+            cacheGeo={etat.cacheGeo}
+            parametres={etat.parametres}
+            onChange={(staff) => setEtat((e) => ({ ...e, staff }))}
+          />
+        ) : onglet === "buvette" ? (
+          <Buvette
+            weekends={etat.buvette}
+            matchs={etat.matchs}
+            parametres={etat.parametres}
+            onChange={(buvette) => setEtat((e) => ({ ...e, buvette }))}
+          />
         ) : (
           <Parametres
             parametres={etat.parametres}
@@ -159,20 +208,19 @@ export default function Accueil() {
               }))
             }
           />
-          )
         )}
 
-        {etat.matchs.length > 0 && (
+        {nbDonnees > 0 && (
           <div className="mt-10 flex items-center justify-end gap-3 text-xs">
             {confirmerReset ? (
               <>
-                <span className="text-foret-700">Effacer les {etat.matchs.length} matchs enregistrés dans ce navigateur ?</span>
+                <span className="text-foret-700">Effacer les matchs, entraînements, déplacements staff et week-ends buvette enregistrés dans ce navigateur ?</span>
                 <button onClick={() => setConfirmerReset(false)} className="text-foret-700/70 hover:text-foret-900">
                   Annuler
                 </button>
                 <button
                   onClick={() => {
-                    ajouterMatchs([], true);
+                    setEtat((e) => ({ ...e, matchs: [], entrainements: [], staff: [], buvette: [] }));
                     setConfirmerReset(false);
                   }}
                   className="font-semibold text-terracotta-600 hover:text-terracotta-700"

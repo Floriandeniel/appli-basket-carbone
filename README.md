@@ -38,9 +38,12 @@ Les icônes sont dans `public/icons/` (générées à partir du logo SVG) et `pu
 |---|---|
 | **Import Excel** | `.xlsx`, `.xls`, `.csv` (séparateur `;` ou `,`, UTF-8 ou Windows-1252). En-têtes reconnus de façon souple. Prévisualisation avec statut par ligne, lignes en erreur ignorées. Bouton « Modèle Excel ». |
 | **Distances** | Colonne vide → estimation depuis la ville du club (réglable dans l'en-tête) : référentiel hors ligne de ~65 communes (Ille-et-Vilaine, Bretagne, départements voisins), reconnaissance dans les libellés libres (« Avenir Basket St Grégoire » → Saint-Grégoire). Ville inconnue → bouton « Localiser en ligne » (OpenStreetMap Nominatim, résultats mis en cache) ou saisie manuelle. |
-| **Logistique** | À l'import, chaque match reçoit automatiquement des voitures thermiques (participants ÷ « participants par voiture », arrondi au-dessus). Ensuite, modification à la main : thermiques, hybrides, électriques, minibus 9 places ; distance et effectif modifiables ; alerte si les places manquent ; boutons « Par défaut » et « Répartition optimale ». Coût affiché par match. |
+| **Transport matchs** | À l'import, chaque match reçoit automatiquement des voitures thermiques (participants ÷ « participants par voiture », arrondi au-dessus). Ensuite, modification à la main : thermiques, hybrides, électriques, minibus 9 places ; distance et effectif modifiables ; alerte si les places manquent ; boutons « Par défaut » et « Répartition optimale ». Coût affiché par match. |
+| **Entraînements** | Par équipe : joueurs, distance moyenne domicile ↔ gymnase A/R, séances par semaine, semaines par saison, répartition voiture seul / covoiturage / bus / vélo-marche. CO2 de la saison et CO2 évité par rapport à « tous en voiture seul ». |
+| **Staff** | Déplacements des entraîneurs, dirigeants et bénévoles (entraînements, réunions, AG, formations, ligue…) : destination (distance estimée), véhicules, répétitions. CO2 et coût au barème km. |
+| **Buvette** | Par week-end : matchs à domicile, bouteilles, sirops, canettes. Estimation = matchs × moyenne par match, remplacée par les quantités réelles quand elles sont saisies. |
 | **Paramètres** | Participants par voiture, barème kilométrique des voitures (€/km), consommation et prix du carburant du minibus, location du minibus (€/déplacement). Boutons pour remplir ou réappliquer la répartition par défaut. |
-| **Tableau de bord** | Cartes d'impact (CO2e évité, émis, km, taux d'occupation), équivalences, émissions par mois, par motorisation, par équipe. Coût total des déplacements (indemnités km, carburant et location minibus). Filtres équipe et mois. Export Excel (onglets Synthèse + Bilan par match) et CSV (Excel FR). |
+| **Tableau de bord** | Empreinte carbone du club par catégorie (matchs, entraînements, staff, buvette). Cartes d'impact (CO2e évité, émis, km, taux d'occupation), équivalences, émissions par mois, par motorisation, par équipe. Coût total des déplacements (indemnités km, carburant et location minibus). Filtres équipe et mois. Export Excel (onglets Synthèse + Bilan par match) et CSV (Excel FR). |
 
 ## Formules (`src/lib/emissions.ts`)
 
@@ -62,6 +65,12 @@ Un match n'entre dans les totaux que s'il a une distance et au moins un véhicul
 - Voitures = nombre de voitures × distance A/R × barème €/km
 - Carburant minibus = minibus × distance A/R × (L/100 km ÷ 100) × prix du litre
 - Location minibus = minibus × coût de location par déplacement
+
+## Buvette, entraînements, staff (`src/lib/club.ts`)
+
+- Buvette : quantité × empreinte par unité (bouteille 1,5 L 0,35 kg, sirop 70 cl 1,2 kg, canette 0,2 kg : estimations à ajuster).
+- Entraînements : km saison par joueur = distance A/R × séances × semaines ; voiture seul 0,218 kg/km par joueur, covoiturage 0,218 ÷ joueurs par voiture, bus 0,113 kg par passager.km, vélo et marche 0.
+- Staff : mêmes facteurs et même barème que les matchs, multipliés par le nombre de répétitions.
 
 ## Hypothèses à valider
 

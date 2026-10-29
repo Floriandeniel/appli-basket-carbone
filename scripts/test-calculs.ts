@@ -58,4 +58,23 @@ const rempli = completerVehicules([{ ...m, vehicules: { thermique: 0, hybride: 0
 assert.equal(rempli[0].vehicules.thermique, 3);
 assert.deepEqual(rempli[1].vehicules, m.vehicules);
 
-console.log("Tous les tests passent ✔");
+// Buvette : 2 matchs × moyenne (4 bouteilles, 0,5 sirop, 12 canettes), canettes saisies à 30
+import("../src/lib/club").then(({ calculerBuvette, calculerCreneau, calculerDeplacementStaff, samediDuWeekend }) => {
+  const bb = calculerBuvette([{ id: "w", date: "2026-11-14", matchsDomicile: 2, bouteilles: null, sirops: null, canettes: 30 }], PARAMETRES_DEFAUT);
+  assert.deepEqual(bb.quantites, { bouteilles: 8, sirops: 1, canettes: 30 });
+  assert.equal(+bb.co2Total.toFixed(2), +(8 * 0.35 + 1.2 + 30 * 0.2).toFixed(2));
+  assert.equal(samediDuWeekend("2026-11-15"), "2026-11-14");
+  assert.equal(samediDuWeekend("2026-11-14"), "2026-11-14");
+  // Entraînement : 10 joueurs, 6 km A/R, 2 séances × 30 semaines ; 50 % voiture, 30 % covoit (3/voiture), 20 % vélo
+  const be = calculerCreneau({ id: "e", equipe: "U13M", joueurs: 10, distanceAR: 6, seancesParSemaine: 2, semaines: 30,
+    partVoiture: 50, partCovoiturage: 30, partBus: 0, partVeloMarche: 20 }, PARAMETRES_DEFAUT);
+  // km/joueur = 360 ; voiture 5×360×0,218 = 392,4 ; covoit 1×360×0,218 = 78,48
+  assert.equal(+be.co2.toFixed(2), 470.88);
+  assert.equal(+be.co2ToutVoiture.toFixed(1), 784.8);
+  // Staff : 1 voiture, 30 km, répété 10 fois
+  const bs = calculerDeplacementStaff({ id: "s", date: "2026-11-01", motif: "Réunion", destination: "Betton", distanceAR: 30,
+    sourceDistance: "manuelle", participants: 2, vehicules: { thermique: 1, hybride: 0, electrique: 0, minibus: 0 }, repetitions: 10 }, PARAMETRES_DEFAUT);
+  assert.equal(+bs.co2.toFixed(2), 65.4);
+  assert.equal(+bs.cout.toFixed(2), 120);
+  console.log("Tous les tests passent ✔");
+});

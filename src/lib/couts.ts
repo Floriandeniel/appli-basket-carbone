@@ -1,5 +1,5 @@
 import { calculerBilanMatch } from "./emissions";
-import type { Match, Vehicules } from "./types";
+import type { Match, Trajet, Vehicules } from "./types";
 
 /** Réglages du club (onglet Paramètres) */
 export interface Parametres {
@@ -13,6 +13,14 @@ export interface Parametres {
   prixCarburantLitre: number;
   /** Coût de location d'un minibus, en € par déplacement */
   locationMinibus: number;
+  /** Buvette : consommation moyenne par match à domicile */
+  buvetteParMatch: Record<"bouteilles" | "sirops" | "canettes", number>;
+  /** Buvette : kgCO2e par unité (produit + emballage, estimation) */
+  buvetteFacteurs: Record<"bouteilles" | "sirops" | "canettes", number>;
+  /** Entraînements : joueurs transportés par voiture en covoiturage */
+  joueursParVoitureCovoit: number;
+  /** Entraînements : kgCO2e par passager.km en bus */
+  facteurBus: number;
 }
 
 export const PARAMETRES_DEFAUT: Parametres = {
@@ -21,6 +29,10 @@ export const PARAMETRES_DEFAUT: Parametres = {
   consoMinibusL100: 10,
   prixCarburantLitre: 1.8,
   locationMinibus: 0,
+  buvetteParMatch: { bouteilles: 4, sirops: 0.5, canettes: 12 },
+  buvetteFacteurs: { bouteilles: 0.35, sirops: 1.2, canettes: 0.2 },
+  joueursParVoitureCovoit: 3,
+  facteurBus: 0.113,
 };
 
 /** Répartition par défaut : uniquement des voitures thermiques, selon le nombre de personnes par voiture */
@@ -51,7 +63,7 @@ export interface CoutMatch {
 
 const COUT_NUL: CoutMatch = { voitures: 0, carburantMinibus: 0, locationMinibus: 0, total: 0, sansCovoiturage: 0 };
 
-export function calculerCoutMatch(m: Match, p: Parametres): CoutMatch {
+export function calculerCoutMatch(m: Trajet, p: Parametres): CoutMatch {
   if (!calculerBilanMatch(m).complet) return { ...COUT_NUL };
   const d = m.distanceAR ?? 0;
   const nbVoitures = m.vehicules.thermique + m.vehicules.hybride + m.vehicules.electrique;
@@ -67,7 +79,7 @@ export function calculerCoutMatch(m: Match, p: Parametres): CoutMatch {
   };
 }
 
-export function calculerCoutGlobal(matchs: Match[], p: Parametres): CoutMatch {
+export function calculerCoutGlobal(matchs: Trajet[], p: Parametres): CoutMatch {
   return matchs.reduce((acc, m) => {
     const c = calculerCoutMatch(m, p);
     return {

@@ -1,4 +1,4 @@
-import type { Match, TypeVehicule, Vehicules } from "./types";
+import type { Match, Trajet, TypeVehicule, Vehicules } from "./types";
 
 /**
  * Facteurs d'émission (kgCO2e par véhicule.km), d'après la Base Empreinte ADEME.
@@ -65,7 +65,7 @@ export interface BilanMatch {
   placesInsuffisantes: boolean;
 }
 
-export function calculerBilanMatch(m: Match): BilanMatch {
+export function calculerBilanMatch(m: Trajet): BilanMatch {
   const d = m.distanceAR ?? 0;
   const nbVehicules = nombreVehicules(m.vehicules);
   const complet = m.distanceAR !== null && m.distanceAR > 0 && nbVehicules > 0;

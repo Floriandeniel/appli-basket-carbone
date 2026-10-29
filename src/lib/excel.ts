@@ -2,7 +2,8 @@ import * as XLSX from "xlsx";
 import { calculerBilanGlobal, calculerBilanMatch, FACTEURS_EMISSION, LIBELLES_VEHICULES, TYPES_VEHICULES } from "./emissions";
 import { equivalences } from "./equivalences";
 import { estimerDistanceAR, normaliser, type Coordonnees } from "./distances";
-import { VEHICULES_VIDES, type LigneImport, type Match } from "./types";
+import { VEHICULES_VIDES, type CreneauEntrainement, type DeplacementStaff, type LigneImport, type Match, type WeekendBuvette } from "./types";
+import { calculerBuvette, calculerCreneau, calculerDeplacementStaff, calculerEntrainements, calculerStaff, CONSOMMABLES, estEstime, LIBELLES_CONSOMMABLES, quantiteBuvette } from "./club";
 import { calculerCoutGlobal, calculerCoutMatch, coutKmMinibus, type Parametres } from "./couts";
 
 /* ------------------------------------------------------------------ */
@@ -253,14 +254,80 @@ function lignesSynthese(matchs: Match[], libelleFiltre: string, p: Parametres) {
   ];
 }
 
-export function exporterBilanExcel(matchs: Match[], libelleFiltre: string, p: Parametres) {
+export interface DonneesClub {
+  entrainements: CreneauEntrainement[];
+  staff: DeplacementStaff[];
+  buvette: WeekendBuvette[];
+}
+
+function lignesSyntheseClub(d: DonneesClub, p: Parametres, matchs: Match[]) {
+  const be = calculerEntrainements(d.entrainements, p);
+  const bs = calculerStaff(d.staff, p);
+  const bb = calculerBuvette(d.buvette, p);
+  const bm = calculerBilanGlobal(matchs);
+  const total = bm.emissionsReelles + be.co2 + bs.co2 + bb.co2Total;
+  return [
+    [],
+    ["Empreinte carbone du club", "kgCO2e", "Part"],
+    ["Transport matchs", arr(bm.emissionsReelles), total ? String(arr((bm.emissionsReelles / total) * 100)).replace(".", ",") + " %" : ""],
+    ["Entraînements (saison)", arr(be.co2), total ? String(arr((be.co2 / total) * 100)).replace(".", ",") + " %" : ""],
+    ["Déplacements staff", arr(bs.co2), total ? String(arr((bs.co2 / total) * 100)).replace(".", ",") + " %" : ""],
+    ["Buvette", arr(bb.co2Total), total ? String(arr((bb.co2Total / total) * 100)).replace(".", ",") + " %" : ""],
+    ["Total", arr(total), ""],
+    ["CO2 évité (covoiturage matchs + modes doux entraînements)", arr(bm.emissionsEvitees + be.evite), "kgCO2e"],
+    [],
+    ["Buvette", "Quantité", "kgCO2e"],
+    ...CONSOMMABLES.map((c) => [LIBELLES_CONSOMMABLES[c], bb.quantites[c], arr(bb.co2[c])]),
+    ["Coût des déplacements staff", arr(bs.cout, 2), "€"],
+  ];
+}
+
+export function exporterBilanExcel(matchs: Match[], libelleFiltre: string, p: Parametres, club?: DonneesClub) {
   const wb = XLSX.utils.book_new();
-  const synthese = XLSX.utils.aoa_to_sheet(lignesSynthese(matchs, libelleFiltre, p));
+  const synthese = XLSX.utils.aoa_to_sheet([...lignesSynthese(matchs, libelleFiltre, p), ...(club ? lignesSyntheseClub(club, p, matchs) : [])]);
   synthese["!cols"] = [{ wch: 34 }, { wch: 20 }, { wch: 18 }];
   XLSX.utils.book_append_sheet(wb, synthese, "Synthèse");
   const detail = XLSX.utils.json_to_sheet(lignesBilan(matchs, p));
   detail["!cols"] = Array(21).fill({ wch: 16 });
   XLSX.utils.book_append_sheet(wb, detail, "Bilan par match");
+  if (club) {
+    const largeur = (ws: XLSX.WorkSheet) => ((ws["!cols"] = Array(14).fill({ wch: 16 })), ws);
+    XLSX.utils.book_append_sheet(
+      wb,
+      largeur(XLSX.utils.json_to_sheet(club.entrainements.map((c) => {
+        const b = calculerCreneau(c, p);
+        return {
+          Équipe: c.equipe, Joueurs: c.joueurs, "Distance A/R (km)": c.distanceAR, "Séances / semaine": c.seancesParSemaine,
+          Semaines: c.semaines, "Voiture seul (%)": c.partVoiture, "Covoiturage (%)": c.partCovoiturage, "Bus (%)": c.partBus,
+          "Vélo / marche (%)": c.partVeloMarche, "Km saison": arr(b.kmJoueurs, 0), "CO2 saison (kgCO2e)": arr(b.co2),
+          "CO2 évité (kgCO2e)": arr(b.evite),
+        };
+      }))),
+      "Entraînements",
+    );
+    XLSX.utils.book_append_sheet(
+      wb,
+      largeur(XLSX.utils.json_to_sheet(club.staff.map((d) => {
+        const b = calculerDeplacementStaff(d, p);
+        return {
+          Date: dateFr(d.date), Motif: d.motif, Destination: d.destination, "Distance A/R (km)": d.distanceAR ?? "",
+          Personnes: d.participants, Véhicules: Object.values(d.vehicules).reduce((x, y) => x + y, 0), Répétitions: d.repetitions,
+          "Km total": b.complet ? arr(b.km, 0) : "", "CO2 (kgCO2e)": b.complet ? arr(b.co2) : "", "Coût (€)": b.complet ? arr(b.cout, 2) : "",
+        };
+      }))),
+      "Staff",
+    );
+    XLSX.utils.book_append_sheet(
+      wb,
+      largeur(XLSX.utils.json_to_sheet(club.buvette.map((w) => ({
+        "Week-end (samedi)": dateFr(w.date),
+        "Matchs à domicile": w.matchsDomicile,
+        ...Object.fromEntries(CONSOMMABLES.flatMap((c) => [[LIBELLES_CONSOMMABLES[c], quantiteBuvette(w, c, p)], [`${LIBELLES_CONSOMMABLES[c]} : origine`, estEstime(w, c) ? "Estimé" : "Compté"]])),
+        "CO2 (kgCO2e)": arr(calculerBuvette([w], p).co2Total),
+      })))),
+      "Buvette",
+    );
+  }
   telecharger(wb, `bilan-carbone-deplacements-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 

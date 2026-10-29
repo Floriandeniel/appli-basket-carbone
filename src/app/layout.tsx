@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Appli Basket Carbone",
-  description: "Mesurer et réduire l'empreinte carbone des déplacements d'équipes d'un club de basket amateur.",
+  description: "Bilan carbone d'un club de basket amateur : matchs, entraînements, staff et buvette.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [

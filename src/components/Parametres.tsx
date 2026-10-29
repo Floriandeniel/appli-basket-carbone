@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Bus, Car, Euro, Fuel, RotateCcw, Users } from "lucide-react";
+import { Bus, Car, CupSoda, Dumbbell, Euro, Fuel, RotateCcw, Users } from "lucide-react";
+import { CONSOMMABLES, LIBELLES_CONSOMMABLES } from "@/lib/club";
 import { coutKmMinibus, fmtEuro, PARAMETRES_DEFAUT, type Parametres as TParametres } from "@/lib/couts";
 import { FACTEURS_EMISSION, LIBELLES_VEHICULES, TYPES_VEHICULES } from "@/lib/emissions";
 import { fmt } from "@/lib/format";
@@ -56,7 +57,8 @@ function Champ({
 
 export function Parametres({ parametres: p, onChange, nbMatchs, nbSansVehicule, onAppliquerDefaut }: Props) {
   const [confirmerTous, setConfirmerTous] = useState(false);
-  const maj = (cle: keyof TParametres) => (n: number) => onChange({ ...p, [cle]: n });
+  type CleNombre = { [K in keyof TParametres]: TParametres[K] extends number ? K : never }[keyof TParametres];
+  const maj = (cle: CleNombre) => (n: number) => onChange({ ...p, [cle]: n });
 
   return (
     <div className="space-y-6">
@@ -171,6 +173,71 @@ export function Parametres({ parametres: p, onChange, nbMatchs, nbSansVehicule, 
               </p>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="carte divide-y divide-sauge-100">
+        <h3 className="flex items-center gap-2 px-5 py-4 text-base font-bold text-foret-900">
+          <CupSoda className="h-4 w-4 text-foret-600" /> Buvette
+        </h3>
+        <div className="grid gap-6 p-5 lg:grid-cols-2">
+          <div className="space-y-4">
+            <p className="text-sm font-semibold text-foret-900">Consommation moyenne par match à domicile</p>
+            {CONSOMMABLES.map((c) => (
+              <Champ
+                key={c}
+                id={`moyenne-${c}`}
+                libelle={LIBELLES_CONSOMMABLES[c]}
+                unite="/ match"
+                pas={0.5}
+                valeur={p.buvetteParMatch[c]}
+                onChange={(n) => onChange({ ...p, buvetteParMatch: { ...p.buvetteParMatch, [c]: n } })}
+              />
+            ))}
+          </div>
+          <div className="space-y-4">
+            <p className="text-sm font-semibold text-foret-900">Empreinte par unité (produit + emballage)</p>
+            {CONSOMMABLES.map((c) => (
+              <Champ
+                key={c}
+                id={`facteur-${c}`}
+                libelle={LIBELLES_CONSOMMABLES[c]}
+                unite="kgCO2e"
+                pas={0.01}
+                valeur={p.buvetteFacteurs[c]}
+                onChange={(n) => onChange({ ...p, buvetteFacteurs: { ...p.buvetteFacteurs, [c]: n } })}
+              />
+            ))}
+            <p className="rounded-xl bg-sable-100 px-4 py-3 text-xs text-foret-700">
+              Valeurs par défaut estimées, à ajuster avec vos fournisseurs ou sur impactco2.fr.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="carte divide-y divide-sauge-100">
+        <h3 className="flex items-center gap-2 px-5 py-4 text-base font-bold text-foret-900">
+          <Dumbbell className="h-4 w-4 text-foret-600" /> Entraînements
+        </h3>
+        <div className="space-y-4 p-5">
+          <Champ
+            id="joueurs-par-voiture-covoit"
+            libelle="Joueurs par voiture en covoiturage"
+            aide="Nombre moyen de joueurs dans une voiture qui fait du covoiturage pour aller à l'entraînement."
+            unite="joueurs"
+            pas={1}
+            valeur={p.joueursParVoitureCovoit}
+            onChange={(n) => maj("joueursParVoitureCovoit")(Math.max(1, Math.round(n)))}
+          />
+          <Champ
+            id="facteur-bus"
+            libelle="Empreinte du bus"
+            aide="Par passager et par km (bus urbain ou car scolaire)."
+            unite="kgCO2e/km"
+            pas={0.001}
+            valeur={p.facteurBus}
+            onChange={maj("facteurBus")}
+          />
         </div>
       </section>
 

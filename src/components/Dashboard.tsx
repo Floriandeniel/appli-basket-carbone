@@ -8,6 +8,9 @@ import {
   Euro,
   Download,
   FileSpreadsheet,
+  Briefcase,
+  CupSoda,
+  Dumbbell,
   Gauge,
   Info,
   Leaf,
@@ -23,11 +26,15 @@ import { calculerBilanGlobal, calculerBilanMatch, FACTEURS_EMISSION, LIBELLES_VE
 import { equivalences } from "@/lib/equivalences";
 import { exporterBilanCsv, exporterBilanExcel } from "@/lib/excel";
 import { fmt, fmtCO2, libelleMois } from "@/lib/format";
-import type { Match } from "@/lib/types";
+import type { CreneauEntrainement, DeplacementStaff, Match, WeekendBuvette } from "@/lib/types";
+import { calculerBilanClub, CONSOMMABLES, LIBELLES_CATEGORIES, LIBELLES_COURTS_CONSOMMABLES, type Categorie } from "@/lib/club";
 import { calculerCoutGlobal, fmtEuro, type Parametres } from "@/lib/couts";
 
 interface Props {
   matchs: Match[];
+  entrainements: CreneauEntrainement[];
+  staff: DeplacementStaff[];
+  buvette: WeekendBuvette[];
   equipes: string[];
   parametres: Parametres;
   onAllerLogistique: () => void;
@@ -76,11 +83,14 @@ function CarteImpact({
   );
 }
 
-export function Dashboard({ matchs, equipes, parametres, onAllerLogistique }: Props) {
+export function Dashboard({ matchs, entrainements, staff, buvette, equipes, parametres, onAllerLogistique }: Props) {
   const [equipe, setEquipe] = useState("toutes");
   const [mois, setMois] = useState("tous");
 
-  const moisDispos = useMemo(() => [...new Set(matchs.map((m) => m.date.slice(0, 7)).filter(Boolean))].sort(), [matchs]);
+  const moisDispos = useMemo(
+    () => [...new Set([...matchs, ...staff, ...buvette].map((x) => x.date.slice(0, 7)).filter(Boolean))].sort(),
+    [matchs, staff, buvette],
+  );
   const filtres = useMemo(
     () => matchs.filter((m) => (equipe === "toutes" || m.equipe === equipe) && (mois === "tous" || m.date.startsWith(mois))),
     [matchs, equipe, mois],
@@ -117,6 +127,25 @@ export function Dashboard({ matchs, equipes, parametres, onAllerLogistique }: Pr
   });
 
   const cout = useMemo(() => calculerCoutGlobal(filtres, parametres), [filtres, parametres]);
+  const club = useMemo(
+    () => calculerBilanClub({ matchs, entrainements, staff, buvette }, { equipe, mois }, parametres),
+    [matchs, entrainements, staff, buvette, equipe, mois, parametres],
+  );
+  const coutTotal = cout.total + club.cout.staff;
+  const donneesClub = useMemo(
+    () => ({
+      entrainements: entrainements.filter((c) => equipe === "toutes" || c.equipe === equipe),
+      staff: staff.filter((d) => mois === "tous" || d.date.startsWith(mois)),
+      buvette: buvette.filter((w) => mois === "tous" || w.date.startsWith(mois)),
+    }),
+    [entrainements, staff, buvette, equipe, mois],
+  );
+  const CATEGORIES: { cle: Categorie; icone: LucideIcon; couleur: string }[] = [
+    { cle: "matchs", icone: Car, couleur: "bg-foret-700" },
+    { cle: "entrainements", icone: Dumbbell, couleur: "bg-emeraude-500" },
+    { cle: "staff", icone: Briefcase, couleur: "bg-sauge-400" },
+    { cle: "buvette", icone: CupSoda, couleur: "bg-terracotta-500" },
+  ];
   const reel = fmtCO2(g.emissionsReelles);
   const evite = fmtCO2(g.emissionsEvitees);
   const reduction = g.emissionsSansCovoiturage > 0 ? (g.emissionsEvitees / g.emissionsSansCovoiturage) * 100 : 0;
@@ -149,7 +178,7 @@ export function Dashboard({ matchs, equipes, parametres, onAllerLogistique }: Pr
           <button onClick={() => exporterBilanCsv(filtres, parametres)} className="btn-secondaire" disabled={!filtres.length}>
             <Download className="h-4 w-4" /> CSV
           </button>
-          <button onClick={() => exporterBilanExcel(filtres, libelleFiltre, parametres)} className="btn-primaire" disabled={!filtres.length}>
+          <button onClick={() => exporterBilanExcel(filtres, libelleFiltre, parametres, donneesClub)} className="btn-primaire" disabled={!filtres.length}>
             <FileSpreadsheet className="h-4 w-4" /> Exporter le bilan Excel
           </button>
         </div>
@@ -164,6 +193,60 @@ export function Dashboard({ matchs, equipes, parametres, onAllerLogistique }: Pr
           {incomplets} match(s) sans logistique ou sans distance ne sont pas comptés. Compléter dans l&apos;onglet Logistique →
         </button>
       )}
+
+      {/* Bilan global du club */}
+      <section className="carte overflow-hidden">
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <div className="border-b border-sauge-200 bg-foret-800 p-5 text-white lg:border-b-0">
+            <p className="text-sm font-semibold text-foret-100">Empreinte carbone du club</p>
+            <p className="mt-4 font-display text-4xl font-bold tabular-nums tracking-tight">
+              {fmtCO2(club.co2Total).valeur} <span className="text-base font-semibold text-foret-200">{fmtCO2(club.co2Total).unite}</span>
+            </p>
+            <p className="mt-1 text-xs text-foret-200">
+              {fmtCO2(club.evite).valeur} {fmtCO2(club.evite).unite} évités grâce au covoiturage, au vélo et au bus
+            </p>
+            <p className="mt-4 text-[11px] leading-relaxed text-foret-200/80">
+              Entraînements : total de la saison, non filtré par mois. Staff et buvette : tout le club, non filtrés par équipe.
+            </p>
+          </div>
+          <div className="space-y-3 p-5">
+            {CATEGORIES.map(({ cle, icone: Icone, couleur }) => {
+              const v = club.co2[cle];
+              const part = club.co2Total > 0 ? (v / club.co2Total) * 100 : 0;
+              return (
+                <div key={cle}>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="flex items-center gap-2 font-medium text-foret-800">
+                      <Icone className="h-4 w-4 text-foret-500" /> {LIBELLES_CATEGORIES[cle]}
+                    </span>
+                    <span className="tabular-nums text-foret-700">
+                      {fmtCO2(v).valeur} {fmtCO2(v).unite} <span className="text-foret-700/60">· {fmt(part)} %</span>
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-sauge-100">
+                    <div className={`h-full rounded-full ${couleur}`} style={{ width: `${part}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+            <div className="grid gap-2 border-t border-sauge-100 pt-3 text-xs text-foret-700 sm:grid-cols-3">
+              <p>
+                <span className="font-semibold text-foret-900">Buvette</span> ·{" "}
+                {CONSOMMABLES.map((c) => `${fmt(club.buvette.quantites[c])} ${LIBELLES_COURTS_CONSOMMABLES[c].toLowerCase()}`).join(", ")}
+              </p>
+              <p>
+                <span className="font-semibold text-foret-900">Entraînements</span> · {fmt(club.entrainements.kmJoueurs)} km parcourus par{" "}
+                {fmt(club.entrainements.joueurs)} joueurs
+              </p>
+              <p>
+                <span className="font-semibold text-foret-900">Staff</span> · {fmt(club.staff.km)} km, {fmtEuro(club.cout.staff)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <h2 className="pt-2 text-xl font-bold text-foret-900">Transport des matchs</h2>
 
       {/* Cartes d'impact */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -216,19 +299,20 @@ export function Dashboard({ matchs, equipes, parametres, onAllerLogistique }: Pr
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-terracotta-300/20 text-terracotta-600">
                 <Euro className="h-[18px] w-[18px]" />
               </span>
-              Coût total des déplacements
+              Coût des déplacements (matchs + staff)
             </p>
-            <p className="mt-4 font-display text-4xl font-bold tabular-nums tracking-tight text-foret-900">{fmtEuro(cout.total)}</p>
+            <p className="mt-4 font-display text-4xl font-bold tabular-nums tracking-tight text-foret-900">{fmtEuro(coutTotal)}</p>
             <p className="mt-1 text-xs text-foret-700/70">
-              {g.participants > 0 ? <>soit {fmtEuro(cout.total / g.participants)} par participant · </> : null}
+              Matchs : {fmtEuro(cout.total)}, soit {fmtEuro(g.participants > 0 ? cout.total / g.participants : 0)} par participant ·{" "}
               {fmtEuro(cout.sansCovoiturage)} si chacun venait avec sa voiture
             </p>
           </div>
-          <ul className="grid divide-y divide-sauge-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <ul className="grid divide-y divide-sauge-100 sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x">
             {[
               { icone: Car, libelle: "Indemnités km voitures", valeur: cout.voitures, detail: `${fmt(parametres.tarifKmVoiture, 2)} € / km` },
               { icone: Bus, libelle: "Carburant minibus", valeur: cout.carburantMinibus, detail: `${fmt(parametres.consoMinibusL100, 1)} L/100 km à ${fmt(parametres.prixCarburantLitre, 2)} €/L` },
               { icone: Bus, libelle: "Location minibus", valeur: cout.locationMinibus, detail: `${fmtEuro(parametres.locationMinibus)} par déplacement` },
+              { icone: Briefcase, libelle: "Déplacements staff", valeur: club.cout.staff, detail: `${fmt(club.staff.km)} km au barème` },
             ].map(({ icone: Icone, libelle, valeur, detail }) => (
               <li key={libelle} className="flex flex-col justify-center gap-1 p-5">
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-foret-700">
