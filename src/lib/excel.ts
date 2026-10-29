@@ -3,6 +3,7 @@ import { calculerBilanGlobal, calculerBilanMatch, FACTEURS_EMISSION, LIBELLES_VE
 import { equivalences } from "./equivalences";
 import { estimerDistanceAR, normaliser, type Coordonnees } from "./distances";
 import { VEHICULES_VIDES, type LigneImport, type Match } from "./types";
+import { calculerCoutGlobal, calculerCoutMatch, coutKmMinibus, type Parametres } from "./couts";
 
 /* ------------------------------------------------------------------ */
 /* Import                                                              */
@@ -183,9 +184,10 @@ export function telechargerModele() {
 const arr = (n: number, d = 1) => Math.round(n * 10 ** d) / 10 ** d;
 const dateFr = (iso: string) => (iso ? iso.split("-").reverse().join("/") : "");
 
-function lignesBilan(matchs: Match[]) {
+function lignesBilan(matchs: Match[], p: Parametres) {
   return matchs.map((m) => {
     const b = calculerBilanMatch(m);
+    const c = calculerCoutMatch(m, p);
     return {
       Date: dateFr(m.date),
       Équipe: m.equipe,
@@ -199,13 +201,18 @@ function lignesBilan(matchs: Match[]) {
       "Émissions réelles (kgCO2e)": b.complet ? arr(b.emissionsReelles) : "",
       "Sans covoiturage (kgCO2e)": b.complet ? arr(b.emissionsSansCovoiturage) : "",
       "Émissions évitées (kgCO2e)": b.complet ? arr(b.emissionsEvitees) : "",
+      "Indemnités km voitures (€)": b.complet ? arr(c.voitures, 2) : "",
+      "Carburant minibus (€)": b.complet ? arr(c.carburantMinibus, 2) : "",
+      "Location minibus (€)": b.complet ? arr(c.locationMinibus, 2) : "",
+      "Coût total (€)": b.complet ? arr(c.total, 2) : "",
       Statut: b.complet ? "Complet" : "Logistique à compléter",
     };
   });
 }
 
-function lignesSynthese(matchs: Match[], libelleFiltre: string) {
+function lignesSynthese(matchs: Match[], libelleFiltre: string, p: Parametres) {
   const g = calculerBilanGlobal(matchs);
+  const c = calculerCoutGlobal(matchs, p);
   const eq = equivalences(g.emissionsEvitees);
   return [
     ["Appli Basket Carbone : bilan des déplacements"],
@@ -221,6 +228,13 @@ function lignesSynthese(matchs: Match[], libelleFiltre: string) {
     ["Émissions évitées", arr(g.emissionsEvitees), "kgCO2e"],
     ["Taux d'occupation moyen", g.tauxOccupationMoyen === null ? "" : arr(g.tauxOccupationMoyen, 2), "pers./véhicule"],
     [],
+    ["Coûts", "Montant", "Unité"],
+    ["Indemnités km voitures", arr(c.voitures, 2), "€"],
+    ["Carburant minibus", arr(c.carburantMinibus, 2), "€"],
+    ["Location minibus", arr(c.locationMinibus, 2), "€"],
+    ["Coût total des déplacements", arr(c.total, 2), "€"],
+    ["Coût si chacun venait avec sa voiture", arr(c.sansCovoiturage, 2), "€"],
+    [],
     ["Équivalences des émissions évitées"],
     ["Recharges de smartphone", Math.round(eq.recharges), "recharges"],
     ["Trajet en TGV", Math.round(eq.kmTGV), "km"],
@@ -229,23 +243,30 @@ function lignesSynthese(matchs: Match[], libelleFiltre: string) {
     ["Facteurs d'émission (ADEME)", "kgCO2e / véhicule.km"],
     ...TYPES_VEHICULES.map((t) => [LIBELLES_VEHICULES[t], FACTEURS_EMISSION[t]]),
     ["Scénario sans covoiturage", "1 voiture thermique par participant"],
+    [],
+    ["Paramètres de coût"],
+    ["Barème kilométrique voitures", p.tarifKmVoiture, "€ / km"],
+    ["Consommation minibus", p.consoMinibusL100, "L / 100 km"],
+    ["Prix du carburant", p.prixCarburantLitre, "€ / litre"],
+    ["Carburant minibus", arr(coutKmMinibus(p), 3), "€ / km"],
+    ["Location minibus", p.locationMinibus, "€ / déplacement"],
   ];
 }
 
-export function exporterBilanExcel(matchs: Match[], libelleFiltre: string) {
+export function exporterBilanExcel(matchs: Match[], libelleFiltre: string, p: Parametres) {
   const wb = XLSX.utils.book_new();
-  const synthese = XLSX.utils.aoa_to_sheet(lignesSynthese(matchs, libelleFiltre));
+  const synthese = XLSX.utils.aoa_to_sheet(lignesSynthese(matchs, libelleFiltre, p));
   synthese["!cols"] = [{ wch: 34 }, { wch: 20 }, { wch: 18 }];
   XLSX.utils.book_append_sheet(wb, synthese, "Synthèse");
-  const detail = XLSX.utils.json_to_sheet(lignesBilan(matchs));
-  detail["!cols"] = Array(17).fill({ wch: 16 });
+  const detail = XLSX.utils.json_to_sheet(lignesBilan(matchs, p));
+  detail["!cols"] = Array(21).fill({ wch: 16 });
   XLSX.utils.book_append_sheet(wb, detail, "Bilan par match");
   telecharger(wb, `bilan-carbone-deplacements-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
-export function exporterBilanCsv(matchs: Match[]) {
+export function exporterBilanCsv(matchs: Match[], p: Parametres) {
   // décimales à la française (virgule) pour Excel FR
-  const lignes = lignesBilan(matchs).map((l) =>
+  const lignes = lignesBilan(matchs, p).map((l) =>
     Object.fromEntries(Object.entries(l).map(([k, v]) => [k, typeof v === "number" ? String(v).replace(".", ",") : v])),
   );
   const ws = XLSX.utils.json_to_sheet(lignes);

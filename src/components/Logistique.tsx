@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowRight, MapPin, Minus, Plus, Trash2, TriangleAlert, Users, WandSparkles } from "lucide-react";
+import { ArrowRight, Fuel, MapPin, Minus, Plus, Trash2, TriangleAlert, Users, WandSparkles } from "lucide-react";
 import {
   calculerBilanMatch,
   FACTEURS_EMISSION,
@@ -12,6 +12,7 @@ import {
   TYPES_VEHICULES,
 } from "@/lib/emissions";
 import type { Match } from "@/lib/types";
+import { calculerCoutMatch, fmtEuro, vehiculesParDefaut, type Parametres } from "@/lib/couts";
 import { dateCourte, fmt, fmtCO2 } from "@/lib/format";
 import { ICONES_VEHICULES, TEINTES_VEHICULES } from "./IconesVehicules";
 
@@ -20,6 +21,7 @@ interface Props {
   equipes: string[];
   onMaj: (id: string, maj: Partial<Match>) => void;
   onSupprimer: (id: string) => void;
+  parametres: Parametres;
 }
 
 function Compteur({ valeur, onChange }: { valeur: number; onChange: (n: number) => void }) {
@@ -41,7 +43,7 @@ function Compteur({ valeur, onChange }: { valeur: number; onChange: (n: number) 
   );
 }
 
-export function Logistique({ matchs, equipes, onMaj, onSupprimer }: Props) {
+export function Logistique({ matchs, equipes, parametres, onMaj, onSupprimer }: Props) {
   const [equipe, setEquipe] = useState("toutes");
   const [aCompleter, setACompleter] = useState(false);
 
@@ -95,6 +97,7 @@ export function Logistique({ matchs, equipes, onMaj, onSupprimer }: Props) {
         const b = calculerBilanMatch(m);
         const co2 = fmtCO2(b.emissionsReelles);
         const evite = fmtCO2(b.emissionsEvitees);
+        const cout = calculerCoutMatch(m, parametres);
         return (
           <article key={m.id} className="carte overflow-hidden">
             <div className="grid gap-0 lg:grid-cols-[1fr_auto]">
@@ -142,6 +145,13 @@ export function Logistique({ matchs, equipes, onMaj, onSupprimer }: Props) {
                     </div>
                   </label>
                   <button
+                    onClick={() => onMaj(m.id, { vehicules: vehiculesParDefaut(m.participants, parametres) })}
+                    className="btn-secondaire py-2 text-xs"
+                    title={`${parametres.personnesParVoiture} participants par voiture thermique (réglable dans Paramètres)`}
+                  >
+                    <Fuel className="h-3.5 w-3.5" /> Par défaut
+                  </button>
+                  <button
                     onClick={() => onMaj(m.id, { vehicules: suggererRepartition(m.participants) })}
                     className="btn-secondaire py-2 text-xs"
                     title="Remplit un minibus puis des voitures pleines"
@@ -182,7 +192,7 @@ export function Logistique({ matchs, equipes, onMaj, onSupprimer }: Props) {
                 )}
               </div>
 
-              <aside className="flex flex-row items-stretch gap-px border-t border-sauge-200 bg-sauge-200 lg:w-56 lg:flex-col lg:border-l lg:border-t-0">
+              <aside className="grid grid-cols-3 gap-px border-t border-sauge-200 bg-sauge-200 lg:flex lg:w-56 lg:flex-col lg:border-l lg:border-t-0">
                 {b.complet ? (
                   <>
                     <div className="flex-1 bg-white p-4">
@@ -201,18 +211,27 @@ export function Logistique({ matchs, equipes, onMaj, onSupprimer }: Props) {
                       </p>
                       <p className="text-[11px] text-foret-700/70">{fmt(b.tauxOccupation ?? 0, 1)} pers./véhicule</p>
                     </div>
+                    <div className="flex-1 bg-white p-4">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-foret-600">Coût</p>
+                      <p className="font-display text-2xl font-bold tabular-nums text-foret-900">{fmtEuro(cout.total)}</p>
+                      <p className="text-[11px] text-foret-700/70">
+                        {m.vehicules.minibus > 0
+                          ? `dont minibus ${fmtEuro(cout.carburantMinibus + cout.locationMinibus)}`
+                          : `${fmt(parametres.tarifKmVoiture, 2)} €/km par voiture`}
+                      </p>
+                    </div>
                   </>
                 ) : (
-                  <div className="flex flex-1 items-center bg-sable-100 p-4 text-xs text-foret-700">
+                  <div className="col-span-3 flex flex-1 items-center bg-sable-100 p-4 text-xs text-foret-700">
                     {m.distanceAR === null ? "Saisissez la distance A/R." : "Ajoutez au moins un véhicule."}
                   </div>
                 )}
                 <button
                   onClick={() => onSupprimer(m.id)}
-                  className="flex items-center justify-center gap-1.5 bg-white px-4 py-2 text-xs text-foret-700/60 hover:text-terracotta-600"
+                  className="col-span-3 flex items-center justify-center gap-1.5 bg-white px-4 py-2 text-xs text-foret-700/60 hover:text-terracotta-600"
                   aria-label={`Supprimer le match contre ${m.adversaire}`}
                 >
-                  <Trash2 className="h-3.5 w-3.5" /> <span className="hidden lg:inline">Supprimer</span>
+                  <Trash2 className="h-3.5 w-3.5" /> Supprimer
                 </button>
               </aside>
             </div>

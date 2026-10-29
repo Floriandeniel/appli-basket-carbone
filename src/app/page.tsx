@@ -1,18 +1,20 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Car, LayoutDashboard, MapPin, RotateCcw, Sparkles, Upload } from "lucide-react";
+import { Car, LayoutDashboard, MapPin, RotateCcw, Settings, Sparkles, Upload } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { BoutonInstaller } from "@/components/BoutonInstaller";
 import { Dashboard } from "@/components/Dashboard";
 import { ImportExcel } from "@/components/ImportExcel";
 import { Logistique } from "@/components/Logistique";
+import { Parametres } from "@/components/Parametres";
+import { completerVehicules, vehiculesParDefaut } from "@/lib/couts";
 import { useEtatClub } from "@/lib/store";
 import { calendrierExemple } from "@/lib/exemple";
 import { estimerDistanceAR, trouverCommune } from "@/lib/distances";
 import { calculerBilanMatch } from "@/lib/emissions";
 
-type Onglet = "dashboard" | "import" | "logistique";
+type Onglet = "dashboard" | "import" | "logistique" | "parametres";
 
 export default function Accueil() {
   const { etat, setEtat, pret, majMatch, ajouterMatchs, supprimerMatch } = useEtatClub();
@@ -43,9 +45,11 @@ export default function Accueil() {
     { id: "dashboard", libelle: "Tableau de bord", icone: LayoutDashboard },
     { id: "import", libelle: "Import Excel", icone: Upload },
     { id: "logistique", libelle: "Logistique", icone: Car, badge: nbACompleter },
+    { id: "parametres", libelle: "Paramètres", icone: Settings },
   ];
 
   const vide = pret && etat.matchs.length === 0;
+  const nbSansVehicule = etat.matchs.filter((m) => Object.values(m.vehicules).every((n) => !n)).length;
 
   return (
     <div className="min-h-screen">
@@ -100,7 +104,7 @@ export default function Accueil() {
           </p>
         )}
 
-        {vide && onglet !== "import" ? (
+        {vide && onglet !== "import" && onglet !== "parametres" ? (
           <section className="carte relative overflow-hidden p-8 md:p-12">
             <div className="max-w-xl">
               <span className="pastille bg-foret-100 text-foret-700">
@@ -117,7 +121,7 @@ export default function Accueil() {
                 <button onClick={() => setOnglet("import")} className="btn-primaire">
                   <Upload className="h-4 w-4" /> Importer un calendrier
                 </button>
-                <button onClick={() => ajouterMatchs(calendrierExemple(etat.villeClub), true)} className="btn-accent">
+                <button onClick={() => ajouterMatchs(completerVehicules(calendrierExemple(etat.villeClub), etat.parametres), true)} className="btn-accent">
                   <Sparkles className="h-4 w-4" /> Charger un exemple
                 </button>
               </div>
@@ -125,7 +129,7 @@ export default function Accueil() {
             <Logo className="pointer-events-none absolute -bottom-6 right-4 hidden h-64 w-64 opacity-90 md:block" />
           </section>
         ) : onglet === "dashboard" ? (
-          <Dashboard matchs={etat.matchs} equipes={equipes} onAllerLogistique={() => setOnglet("logistique")} />
+          <Dashboard matchs={etat.matchs} equipes={equipes} parametres={etat.parametres} onAllerLogistique={() => setOnglet("logistique")} />
         ) : onglet === "import" ? (
           <ImportExcel
             villeClub={etat.villeClub}
@@ -133,12 +137,29 @@ export default function Accueil() {
             aDejaDesMatchs={etat.matchs.length > 0}
             onCache={(ajouts) => setEtat((e) => ({ ...e, cacheGeo: { ...e.cacheGeo, ...ajouts } }))}
             onValider={(matchs, remplacer) => {
-              ajouterMatchs(matchs, remplacer);
+              ajouterMatchs(completerVehicules(matchs, etat.parametres), remplacer);
               setOnglet("logistique");
             }}
           />
         ) : (
-          <Logistique matchs={etat.matchs} equipes={equipes} onMaj={majMatch} onSupprimer={supprimerMatch} />
+          onglet === "logistique" ? (
+          <Logistique matchs={etat.matchs} equipes={equipes} parametres={etat.parametres} onMaj={majMatch} onSupprimer={supprimerMatch} />
+        ) : (
+          <Parametres
+            parametres={etat.parametres}
+            onChange={(parametres) => setEtat((e) => ({ ...e, parametres }))}
+            nbMatchs={etat.matchs.length}
+            nbSansVehicule={nbSansVehicule}
+            onAppliquerDefaut={(tous) =>
+              setEtat((e) => ({
+                ...e,
+                matchs: tous
+                  ? e.matchs.map((m) => ({ ...m, vehicules: vehiculesParDefaut(m.participants, e.parametres) }))
+                  : completerVehicules(e.matchs, e.parametres),
+              }))
+            }
+          />
+          )
         )}
 
         {etat.matchs.length > 0 && (

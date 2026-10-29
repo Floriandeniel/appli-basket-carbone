@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from "react";
 import {
+  Bus,
   CalendarDays,
+  Car,
+  Euro,
   Download,
   FileSpreadsheet,
   Gauge,
@@ -21,10 +24,12 @@ import { equivalences } from "@/lib/equivalences";
 import { exporterBilanCsv, exporterBilanExcel } from "@/lib/excel";
 import { fmt, fmtCO2, libelleMois } from "@/lib/format";
 import type { Match } from "@/lib/types";
+import { calculerCoutGlobal, fmtEuro, type Parametres } from "@/lib/couts";
 
 interface Props {
   matchs: Match[];
   equipes: string[];
+  parametres: Parametres;
   onAllerLogistique: () => void;
 }
 
@@ -71,7 +76,7 @@ function CarteImpact({
   );
 }
 
-export function Dashboard({ matchs, equipes, onAllerLogistique }: Props) {
+export function Dashboard({ matchs, equipes, parametres, onAllerLogistique }: Props) {
   const [equipe, setEquipe] = useState("toutes");
   const [mois, setMois] = useState("tous");
 
@@ -96,10 +101,13 @@ export function Dashboard({ matchs, equipes, onAllerLogistique }: Props) {
   const parEquipe = useMemo(() => {
     const base = matchs.filter((m) => mois === "tous" || m.date.startsWith(mois));
     return equipes
-      .map((e) => ({ equipe: e, ...calculerBilanGlobal(base.filter((m) => m.equipe === e)) }))
+      .map((e) => {
+        const ms = base.filter((m) => m.equipe === e);
+        return { equipe: e, ...calculerBilanGlobal(ms), cout: calculerCoutGlobal(ms, parametres).total };
+      })
       .filter((x) => x.nbMatchs > 0)
       .sort((a, b) => b.emissionsEvitees - a.emissionsEvitees);
-  }, [matchs, equipes, mois]);
+  }, [matchs, equipes, mois, parametres]);
 
   // Répartition des véhicules.km par motorisation
   const parMotorisation = TYPES_VEHICULES.map((t) => {
@@ -108,6 +116,7 @@ export function Dashboard({ matchs, equipes, onAllerLogistique }: Props) {
     return { t, km, co2: km * FACTEURS_EMISSION[t] };
   });
 
+  const cout = useMemo(() => calculerCoutGlobal(filtres, parametres), [filtres, parametres]);
   const reel = fmtCO2(g.emissionsReelles);
   const evite = fmtCO2(g.emissionsEvitees);
   const reduction = g.emissionsSansCovoiturage > 0 ? (g.emissionsEvitees / g.emissionsSansCovoiturage) * 100 : 0;
@@ -137,10 +146,10 @@ export function Dashboard({ matchs, equipes, onAllerLogistique }: Props) {
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => exporterBilanCsv(filtres)} className="btn-secondaire" disabled={!filtres.length}>
+          <button onClick={() => exporterBilanCsv(filtres, parametres)} className="btn-secondaire" disabled={!filtres.length}>
             <Download className="h-4 w-4" /> CSV
           </button>
-          <button onClick={() => exporterBilanExcel(filtres, libelleFiltre)} className="btn-primaire" disabled={!filtres.length}>
+          <button onClick={() => exporterBilanExcel(filtres, libelleFiltre, parametres)} className="btn-primaire" disabled={!filtres.length}>
             <FileSpreadsheet className="h-4 w-4" /> Exporter le bilan Excel
           </button>
         </div>
@@ -198,6 +207,40 @@ export function Dashboard({ matchs, equipes, onAllerLogistique }: Props) {
           }
         />
       </div>
+
+      {/* Coûts */}
+      <section className="carte overflow-hidden">
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <div className="border-b border-sauge-200 p-5 lg:border-b-0 lg:border-r">
+            <p className="flex items-center gap-2 text-sm font-semibold text-foret-700">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-terracotta-300/20 text-terracotta-600">
+                <Euro className="h-[18px] w-[18px]" />
+              </span>
+              Coût total des déplacements
+            </p>
+            <p className="mt-4 font-display text-4xl font-bold tabular-nums tracking-tight text-foret-900">{fmtEuro(cout.total)}</p>
+            <p className="mt-1 text-xs text-foret-700/70">
+              {g.participants > 0 ? <>soit {fmtEuro(cout.total / g.participants)} par participant · </> : null}
+              {fmtEuro(cout.sansCovoiturage)} si chacun venait avec sa voiture
+            </p>
+          </div>
+          <ul className="grid divide-y divide-sauge-100 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            {[
+              { icone: Car, libelle: "Indemnités km voitures", valeur: cout.voitures, detail: `${fmt(parametres.tarifKmVoiture, 2)} € / km` },
+              { icone: Bus, libelle: "Carburant minibus", valeur: cout.carburantMinibus, detail: `${fmt(parametres.consoMinibusL100, 1)} L/100 km à ${fmt(parametres.prixCarburantLitre, 2)} €/L` },
+              { icone: Bus, libelle: "Location minibus", valeur: cout.locationMinibus, detail: `${fmtEuro(parametres.locationMinibus)} par déplacement` },
+            ].map(({ icone: Icone, libelle, valeur, detail }) => (
+              <li key={libelle} className="flex flex-col justify-center gap-1 p-5">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-foret-700">
+                  <Icone className="h-3.5 w-3.5 text-foret-500" /> {libelle}
+                </span>
+                <span className="font-display text-2xl font-bold tabular-nums text-foret-900">{fmtEuro(valeur)}</span>
+                <span className="text-[11px] text-foret-700/70">{detail}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
 
       {/* Équivalences */}
       <section className="carte overflow-hidden">
@@ -285,7 +328,7 @@ export function Dashboard({ matchs, equipes, onAllerLogistique }: Props) {
       <section className="carte overflow-hidden">
         <h3 className="border-b border-sauge-200 px-5 py-3 text-base font-bold text-foret-900">Bilan par équipe</h3>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-sauge-50 text-left text-xs uppercase tracking-wide text-foret-700">
               <tr>
                 <th className="px-5 py-2.5">Équipe</th>
@@ -294,6 +337,7 @@ export function Dashboard({ matchs, equipes, onAllerLogistique }: Props) {
                 <th className="px-5 py-2.5 text-right">Émis (kg)</th>
                 <th className="px-5 py-2.5 text-right">Évité (kg)</th>
                 <th className="px-5 py-2.5 text-right">Occupation</th>
+                <th className="px-5 py-2.5 text-right">Coût</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-sauge-100">
@@ -309,6 +353,7 @@ export function Dashboard({ matchs, equipes, onAllerLogistique }: Props) {
                   <td className="px-5 py-2.5 text-right tabular-nums">{fmt(x.emissionsReelles, 1)}</td>
                   <td className="px-5 py-2.5 text-right font-semibold tabular-nums text-emeraude-600">{fmt(x.emissionsEvitees, 1)}</td>
                   <td className="px-5 py-2.5 text-right tabular-nums">{x.tauxOccupationMoyen === null ? "—" : fmt(x.tauxOccupationMoyen, 1)}</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums">{fmtEuro(x.cout)}</td>
                 </tr>
               ))}
             </tbody>

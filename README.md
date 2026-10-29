@@ -38,8 +38,9 @@ Les icônes sont dans `public/icons/` (générées à partir du logo SVG) et `pu
 |---|---|
 | **Import Excel** | `.xlsx`, `.xls`, `.csv` (séparateur `;` ou `,`, UTF-8 ou Windows-1252). En-têtes reconnus de façon souple. Prévisualisation avec statut par ligne, lignes en erreur ignorées. Bouton « Modèle Excel ». |
 | **Distances** | Colonne vide → estimation depuis la ville du club (réglable dans l'en-tête) : référentiel hors ligne de ~65 communes (Ille-et-Vilaine, Bretagne, départements voisins), reconnaissance dans les libellés libres (« Avenir Basket St Grégoire » → Saint-Grégoire). Ville inconnue → bouton « Localiser en ligne » (OpenStreetMap Nominatim, résultats mis en cache) ou saisie manuelle. |
-| **Logistique** | Par match : nombre de voitures thermiques, hybrides, électriques et de minibus 9 places ; distance et effectif modifiables ; alerte si les places manquent ; bouton « Répartition optimale ». |
-| **Tableau de bord** | Cartes d'impact (CO2e évité, émis, km, taux d'occupation), équivalences, émissions par mois, par motorisation, par équipe. Filtres équipe et mois. Export Excel (onglets Synthèse + Bilan par match) et CSV (Excel FR). |
+| **Logistique** | À l'import, chaque match reçoit automatiquement des voitures thermiques (participants ÷ « participants par voiture », arrondi au-dessus). Ensuite, modification à la main : thermiques, hybrides, électriques, minibus 9 places ; distance et effectif modifiables ; alerte si les places manquent ; boutons « Par défaut » et « Répartition optimale ». Coût affiché par match. |
+| **Paramètres** | Participants par voiture, barème kilométrique des voitures (€/km), consommation et prix du carburant du minibus, location du minibus (€/déplacement). Boutons pour remplir ou réappliquer la répartition par défaut. |
+| **Tableau de bord** | Cartes d'impact (CO2e évité, émis, km, taux d'occupation), équivalences, émissions par mois, par motorisation, par équipe. Coût total des déplacements (indemnités km, carburant et location minibus). Filtres équipe et mois. Export Excel (onglets Synthèse + Bilan par match) et CSV (Excel FR). |
 
 ## Formules (`src/lib/emissions.ts`)
 
@@ -55,6 +56,12 @@ Pour un match de distance A/R `d` et `P` participants :
 Un match n'entre dans les totaux que s'il a une distance et au moins un véhicule.
 
 **Distance estimée** = distance à vol d'oiseau × 1,2 (coefficient de détour routier) × 2. C'est un ordre de grandeur : pour un bilan officiel, remplissez la colonne distance (Mappy, Google Maps).
+
+## Coûts (`src/lib/couts.ts`)
+
+- Voitures = nombre de voitures × distance A/R × barème €/km
+- Carburant minibus = minibus × distance A/R × (L/100 km ÷ 100) × prix du litre
+- Location minibus = minibus × coût de location par déplacement
 
 ## Hypothèses à valider
 

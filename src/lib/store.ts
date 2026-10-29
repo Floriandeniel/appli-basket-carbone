@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Coordonnees } from "./distances";
 import type { Match } from "./types";
+import { PARAMETRES_DEFAUT, type Parametres } from "./couts";
 
 /** État de l'application, conservé dans le navigateur (localStorage) */
 export interface EtatClub {
@@ -10,15 +11,18 @@ export interface EtatClub {
   matchs: Match[];
   /** Coordonnées obtenues en ligne, indexées par nom normalisé */
   cacheGeo: Record<string, Coordonnees>;
+  parametres: Parametres;
 }
 
 const CLE = "appli-basket-carbone:v1";
-const ETAT_INITIAL: EtatClub = { villeClub: "Rennes", matchs: [], cacheGeo: {} };
+const ETAT_INITIAL: EtatClub = { villeClub: "Rennes", matchs: [], cacheGeo: {}, parametres: PARAMETRES_DEFAUT };
 
 function charger(): EtatClub {
   try {
     const brut = window.localStorage.getItem(CLE);
-    return brut ? { ...ETAT_INITIAL, ...JSON.parse(brut) } : ETAT_INITIAL;
+    if (!brut) return ETAT_INITIAL;
+    const lu = JSON.parse(brut);
+    return { ...ETAT_INITIAL, ...lu, parametres: { ...PARAMETRES_DEFAUT, ...(lu.parametres ?? {}) } };
   } catch {
     return ETAT_INITIAL;
   }

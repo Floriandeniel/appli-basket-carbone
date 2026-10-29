@@ -1,0 +1,196 @@
+"use client";
+
+import { useState } from "react";
+import { Bus, Car, Euro, Fuel, RotateCcw, Users } from "lucide-react";
+import { coutKmMinibus, fmtEuro, PARAMETRES_DEFAUT, type Parametres as TParametres } from "@/lib/couts";
+import { FACTEURS_EMISSION, LIBELLES_VEHICULES, TYPES_VEHICULES } from "@/lib/emissions";
+import { fmt } from "@/lib/format";
+
+interface Props {
+  parametres: TParametres;
+  onChange: (p: TParametres) => void;
+  nbMatchs: number;
+  nbSansVehicule: number;
+  /** tous = true : remplace la répartition de tous les matchs */
+  onAppliquerDefaut: (tous: boolean) => void;
+}
+
+function Champ({
+  id,
+  libelle,
+  aide,
+  unite,
+  valeur,
+  pas,
+  onChange,
+}: {
+  id: string;
+  libelle: string;
+  aide?: string;
+  unite: string;
+  valeur: number;
+  pas: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <label htmlFor={id} className="min-w-0">
+        <span className="block text-sm font-semibold text-foret-900">{libelle}</span>
+        {aide && <span className="block text-xs text-foret-700/70">{aide}</span>}
+      </label>
+      <div className="flex shrink-0 items-center gap-2">
+        <input
+          id={id}
+          type="number"
+          min={0}
+          step={pas}
+          value={Number.isFinite(valeur) ? valeur : ""}
+          onChange={(e) => onChange(Math.max(0, parseFloat(e.target.value.replace(",", ".")) || 0))}
+          className="champ w-28 text-right tabular-nums"
+        />
+        <span className="w-20 text-sm text-foret-700">{unite}</span>
+      </div>
+    </div>
+  );
+}
+
+export function Parametres({ parametres: p, onChange, nbMatchs, nbSansVehicule, onAppliquerDefaut }: Props) {
+  const [confirmerTous, setConfirmerTous] = useState(false);
+  const maj = (cle: keyof TParametres) => (n: number) => onChange({ ...p, [cle]: n });
+
+  return (
+    <div className="space-y-6">
+      <div className="carte p-5">
+        <h2 className="text-2xl font-bold text-foret-900">Paramètres</h2>
+        <p className="mt-1 text-sm text-foret-700/80">
+          Ces réglages servent au remplissage automatique des véhicules et au calcul du coût des déplacements. Ils sont
+          enregistrés dans ce navigateur.
+        </p>
+      </div>
+
+      <section className="carte divide-y divide-sauge-100">
+        <h3 className="flex items-center gap-2 px-5 py-4 text-base font-bold text-foret-900">
+          <Users className="h-4 w-4 text-foret-600" /> Véhicules par défaut
+        </h3>
+        <div className="space-y-4 p-5">
+          <Champ
+            id="personnes-par-voiture"
+            libelle="Participants par voiture"
+            aide="À l'import, chaque match reçoit automatiquement ce nombre de voitures thermiques : participants ÷ cette valeur, arrondi au-dessus."
+            unite="pers."
+            pas={1}
+            valeur={p.personnesParVoiture}
+            onChange={(n) => maj("personnesParVoiture")(Math.max(1, Math.round(n)))}
+          />
+          <p className="rounded-xl bg-sauge-50 px-4 py-3 text-xs text-foret-700">
+            Exemple : 10 participants à {Math.max(1, p.personnesParVoiture)} par voiture ={" "}
+            <strong>{Math.ceil(10 / Math.max(1, p.personnesParVoiture))} voitures thermiques</strong>. Vous modifiez
+            ensuite à la main dans l&apos;onglet Logistique les matchs faits en hybride, électrique ou minibus.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => onAppliquerDefaut(false)}
+              disabled={!nbSansVehicule}
+              className="btn-secondaire"
+            >
+              <Car className="h-4 w-4" /> Remplir les {nbSansVehicule} match{nbSansVehicule > 1 ? "s" : ""} sans véhicule
+            </button>
+            {confirmerTous ? (
+              <span className="flex flex-wrap items-center gap-3 text-sm">
+                <span className="text-foret-800">Remplacer la logistique des {nbMatchs} matchs ?</span>
+                <button onClick={() => setConfirmerTous(false)} className="text-foret-700/70 hover:text-foret-900">
+                  Annuler
+                </button>
+                <button
+                  onClick={() => {
+                    onAppliquerDefaut(true);
+                    setConfirmerTous(false);
+                  }}
+                  className="font-semibold text-terracotta-600 hover:text-terracotta-700"
+                >
+                  Tout remplacer
+                </button>
+              </span>
+            ) : (
+              <button onClick={() => setConfirmerTous(true)} disabled={!nbMatchs} className="btn-secondaire">
+                <RotateCcw className="h-4 w-4" /> Réappliquer à tous les matchs
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="carte divide-y divide-sauge-100">
+        <h3 className="flex items-center gap-2 px-5 py-4 text-base font-bold text-foret-900">
+          <Euro className="h-4 w-4 text-foret-600" /> Coûts des déplacements
+        </h3>
+        <div className="space-y-5 p-5">
+          <Champ
+            id="tarif-km"
+            libelle="Barème kilométrique des voitures"
+            aide="Indemnité versée par km parcouru (aller-retour), pour toutes les voitures : thermique, hybride, électrique."
+            unite="€ / km"
+            pas={0.01}
+            valeur={p.tarifKmVoiture}
+            onChange={maj("tarifKmVoiture")}
+          />
+          <div className="border-t border-sauge-100 pt-5">
+            <p className="mb-4 flex items-center gap-2 text-sm font-semibold text-foret-900">
+              <Bus className="h-4 w-4 text-foret-600" /> Minibus
+            </p>
+            <div className="space-y-4">
+              <Champ
+                id="conso-minibus"
+                libelle="Consommation"
+                unite="L / 100 km"
+                pas={0.5}
+                valeur={p.consoMinibusL100}
+                onChange={maj("consoMinibusL100")}
+              />
+              <Champ
+                id="prix-carburant"
+                libelle="Prix du carburant"
+                unite="€ / litre"
+                pas={0.01}
+                valeur={p.prixCarburantLitre}
+                onChange={maj("prixCarburantLitre")}
+              />
+              <Champ
+                id="location-minibus"
+                libelle="Location du minibus"
+                aide="Montant payé pour chaque déplacement en minibus. Mettez 0 si le minibus appartient au club."
+                unite="€ / dépl."
+                pas={1}
+                valeur={p.locationMinibus}
+                onChange={maj("locationMinibus")}
+              />
+              <p className="flex items-center gap-2 rounded-xl bg-sauge-50 px-4 py-3 text-xs text-foret-700">
+                <Fuel className="h-4 w-4 shrink-0" />
+                Carburant du minibus : {fmtEuro(coutKmMinibus(p))} par km, soit {fmtEuro(coutKmMinibus(p) * 100)} pour 100 km A/R
+                {p.locationMinibus > 0 && <> + {fmtEuro(p.locationMinibus)} de location</>}.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="carte p-5">
+        <h3 className="text-base font-bold text-foret-900">Facteurs d&apos;émission (ADEME)</h3>
+        <ul className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+          {TYPES_VEHICULES.map((t) => (
+            <li key={t} className="flex justify-between rounded-lg bg-sauge-50 px-3 py-2">
+              <span className="text-foret-800">{LIBELLES_VEHICULES[t]}</span>
+              <span className="tabular-nums text-foret-700">{fmt(FACTEURS_EMISSION[t], 3)} kgCO2e/km</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <div className="flex justify-end">
+        <button onClick={() => onChange(PARAMETRES_DEFAUT)} className="text-xs text-foret-700/60 hover:text-terracotta-600">
+          Revenir aux valeurs par défaut
+        </button>
+      </div>
+    </div>
+  );
+}

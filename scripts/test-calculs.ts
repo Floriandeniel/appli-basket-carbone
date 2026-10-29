@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { calculerBilanMatch, calculerBilanGlobal, suggererRepartition } from "../src/lib/emissions";
 import { estimerDistanceAR, trouverCommune } from "../src/lib/distances";
 import { analyserLignes, lireClasseur, lireDate } from "../src/lib/excel";
+import { calculerCoutMatch, completerVehicules, PARAMETRES_DEFAUT, vehiculesParDefaut } from "../src/lib/couts";
 
 const m = {
   id: "t", date: "2026-11-14", equipe: "U13M", adversaire: "Betton",
@@ -43,4 +44,18 @@ for (const f of ["exemples/calendrier-exemple.xlsx", "exemples/calendrier-exempl
   assert.equal(res.lignes[0].match.date, "2026-11-14");
   assert.ok(ok.length >= 10);
 }
+// Coûts : 3 voitures × 20 km × 0,40 = 24 €
+const c = calculerCoutMatch(m, PARAMETRES_DEFAUT);
+assert.equal(+c.voitures.toFixed(2), 24);
+assert.equal(+c.sansCovoiturage.toFixed(2), 80);
+// Minibus : 20 km × 10 L/100 × 1,80 = 3,60 € + 50 € de location
+const cm = calculerCoutMatch({ ...m, vehicules: { thermique: 0, hybride: 0, electrique: 0, minibus: 1 } }, { ...PARAMETRES_DEFAUT, locationMinibus: 50 });
+assert.equal(+cm.carburantMinibus.toFixed(2), 3.6);
+assert.equal(+cm.total.toFixed(2), 53.6);
+// Remplissage par défaut : 10 participants à 4 par voiture = 3 thermiques
+assert.deepEqual(vehiculesParDefaut(10, PARAMETRES_DEFAUT), { thermique: 3, hybride: 0, electrique: 0, minibus: 0 });
+const rempli = completerVehicules([{ ...m, vehicules: { thermique: 0, hybride: 0, electrique: 0, minibus: 0 } }, m], PARAMETRES_DEFAUT);
+assert.equal(rempli[0].vehicules.thermique, 3);
+assert.deepEqual(rempli[1].vehicules, m.vehicules);
+
 console.log("Tous les tests passent ✔");
